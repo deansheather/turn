@@ -2,6 +2,7 @@
 package turn
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -107,7 +108,19 @@ func NewServer(config ServerConfig) (*Server, error) {
 					return
 				}
 
-				go s.readLoop(NewSTUNConn(conn), allocationManager)
+				go func() {
+					// We don't include this in readLoop because it's used by
+					// packetConConfigs above as well and we don't want to
+					// change the behavior of that.
+					defer func() {
+						err := conn.Close()
+						if err != nil && !errors.Is(err, net.ErrClosed) {
+							s.log.Debugf("could not close accepted connection: %v", err.Error())
+						}
+					}()
+
+					s.readLoop(NewSTUNConn(conn), allocationManager)
+				}()
 			}
 		}(listener)
 	}
